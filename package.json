@@ -1,0 +1,34 @@
+{
+  "name": "com.thebaddest.simpledi",
+  "displayName": "Simple Dependency Injection",
+  "version": "1.0.0",
+  "description": "A Unity dependency injection container for managing bindings, resolving, and injecting dependencies.",
+  "keywords": [],
+  "samples": [
+    {
+      "displayName": "Example 1",
+      "description": "Example to show usage of dependency injection with non mono behavior classes",
+      "path": "Samples~/Example1/"
+    },
+    {
+      "displayName": "Example 2",
+      "description": "Example to show usage of dependency injection with mono behavior classes",
+      "path": "Samples~/Example2/"
+    }
+  ],
+  "relatedPackages": {},
+  "_upm": {
+    "changelog": ""
+  },
+  "documentationUrl": "https://github.com/UmairSaifullah01/SimpleDI-Unity",
+  "repository": {
+    "url": "https://github.com/UmairSaifullah01/SimpleDI-Unity.git",
+    "type": "git",
+    "revision": "a7dd0751db55cd55e3b336723fb51433c1de7244"
+  },
+  "author": {
+    "name": "Umair Saifullah",
+    "email": "umairsaifullah01@gmail.com",
+    "url": "https://github.com/UmairSaifullah01"
+  }
+}
