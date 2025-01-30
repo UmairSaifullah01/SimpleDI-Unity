@@ -2,13 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using UnityEngine;
 
 
-namespace THEBADDEST.SimpleDependencyInjection
-{
-
-
-}
 namespace THEBADDEST.SimpleDependencyInjection
 {
     
@@ -54,6 +50,22 @@ namespace THEBADDEST.SimpleDependencyInjection
             InjectDependencies(projectContext.ProjectObjectsWithType);
         }
 
+
+        /// <summary>
+        /// Injects dependencies into objects attached to the specified game object.
+        /// </summary>
+        /// <param name="gameObject">The game object to inject dependencies into.</param>
+        /// <param name="children">Whether to inject dependencies into all child objects recursively, or just the specified game object.</param>
+        public void InjectObject(GameObject gameObject,bool children=false)
+        {
+            var objectsWithType = (children ? gameObject.GetComponentsInChildren<MonoBehaviour>() : gameObject.GetComponents<MonoBehaviour>())
+                .GroupBy(component => component.GetType())
+                .ToDictionary(group => group.Key, group => group.ToList<object>());
+
+            AddBindings(objectsWithType);
+            InjectDependencies(objectsWithType);
+        }
+        
         /// <summary>
         /// Adds bindings for the specified objects to the global container.
         /// </summary>
@@ -83,6 +95,7 @@ namespace THEBADDEST.SimpleDependencyInjection
             }
         }
 
+        
         /// <summary>
         /// Injects dependencies into the specified objects.
         /// </summary>
