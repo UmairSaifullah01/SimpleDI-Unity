@@ -15,6 +15,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 		{
 			_container=DependencyContainer.Create();
 			InstallBindings();
+			
 		}
 
 		/// <summary>
