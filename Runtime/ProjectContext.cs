@@ -12,22 +12,42 @@ namespace THEBADDEST.SimpleDependencyInjection
 	public class ProjectContext : ScriptableObject
 	{
 
-		[SerializeField] List<ScriptableObject>        projectObjects;
+		[SerializeField] bool                          enabled = false;
+		[SerializeField] List<ScriptableObject>        projectObjectsBeforeSceneLoaded;
+		[SerializeField] List<ScriptableObject>        projectObjectsAfterSceneLoaded;
 		public           Dictionary<Type,List<object>> ProjectObjectsWithType{ get; private set; }
 
-		private void ConvertDictionary()
+		private void ConvertDictionaryBeforeSceneLoaded()
 		{
-			ProjectObjectsWithType = projectObjects.GroupBy(obj => obj.GetType()).ToDictionary(grp => grp.Key, grp => grp.Cast<object>().ToList());
+			ProjectObjectsWithType = projectObjectsBeforeSceneLoaded.GroupBy(obj => obj.GetType()).ToDictionary(grp => grp.Key, grp => grp.Cast<object>().ToList());
+		}
+		private void ConvertDictionaryAfterSceneLoaded()
+		{
+			ProjectObjectsWithType = projectObjectsBeforeSceneLoaded.GroupBy(obj => obj.GetType()).ToDictionary(grp => grp.Key, grp => grp.Cast<object>().ToList());
 		}
 		
-		[RuntimeInitializeOnLoadMethod]
-		static void Initialize()
+		
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+		static void LoadBeforeSceneLoad()
 		{
-			
 			var projectContext = Resources.Load("ProjectContext") as ProjectContext;
 			if (projectContext != null)
 			{
-				projectContext.ConvertDictionary();
+				if(!projectContext.enabled) return;
+				
+				projectContext.ConvertDictionaryBeforeSceneLoaded();
+				DCExtensionMethods.GetStaticIOTracker().InjectProject(projectContext);
+			}
+		}
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+		static void LoadAfterSceneLoad()
+		{
+			var projectContext = Resources.Load("ProjectContext") as ProjectContext;
+			if (projectContext != null)
+			{
+				if(!projectContext.enabled) return;
+				
+				projectContext.ConvertDictionaryAfterSceneLoaded();
 				DCExtensionMethods.GetStaticIOTracker().InjectProject(projectContext);
 			}
 		}
