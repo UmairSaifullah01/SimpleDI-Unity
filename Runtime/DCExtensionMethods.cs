@@ -44,7 +44,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 			_container              = DependencyContainer.Create();
 			injectableObjectTracker = new InjectableObjectTracker();
 		}
-		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterAssembliesLoaded)]
 		private static void Preload()
 		{
 			// Force the static constructor of DCExtensionMethods to run
