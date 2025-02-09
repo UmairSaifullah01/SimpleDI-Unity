@@ -23,7 +23,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 		}
 		private void ConvertDictionaryAfterSceneLoaded()
 		{
-			ProjectObjectsWithType = projectObjectsBeforeSceneLoaded.GroupBy(obj => obj.GetType()).ToDictionary(grp => grp.Key, grp => grp.Cast<object>().ToList());
+			ProjectObjectsWithType = projectObjectsAfterSceneLoaded.GroupBy(obj => obj.GetType()).ToDictionary(grp => grp.Key, grp => grp.Cast<object>().ToList());
 		}
 		
 		

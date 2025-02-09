@@ -7,6 +7,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 {
 
 	
+	[DefaultExecutionOrder(-2)]
 	public class SceneContext : MonoBehaviour
 	{
 
