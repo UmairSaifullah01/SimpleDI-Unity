@@ -27,11 +27,12 @@ namespace THEBADDEST.SimpleDependencyInjection
         /// Injects dependencies into objects in the specified scene.
         /// </summary>
         /// <param name="sceneName">The name of the scene to inject dependencies into.</param>
-        public void InjectScene(string sceneName)
+        public void InjectScene(SceneContext sceneContext)
         {
-            var desiredSceneContext = SceneContexts.FirstOrDefault(context => context.SceneName == sceneName);
+            var desiredSceneContext = sceneContext;
             if (desiredSceneContext != null)
             {
+                SceneContexts.Add(sceneContext);
                 AddBindings(desiredSceneContext.SceneComponents);
                 InjectDependencies(desiredSceneContext.SceneComponents);
             }
@@ -84,12 +85,12 @@ namespace THEBADDEST.SimpleDependencyInjection
                     {
                         foreach (var interfaceType in interfaces)
                         {
-                            objects.ForEach(obj => DependencyContainer.GlobalContainer.Bind(interfaceType, type, () => obj, attribute.Lifetime));
+                            objects.ForEach(obj => DependencyContainer.Global.Bind(interfaceType, type, () => obj, attribute.Lifetime));
                         }
                     }
                     else
                     {
-                        objects.ForEach(obj => DependencyContainer.GlobalContainer.Bind(type, type, () => obj, attribute.Lifetime));
+                        objects.ForEach(obj => DependencyContainer.Global.Bind(type, type, () => obj, attribute.Lifetime));
                     }
                 }
             }
@@ -106,9 +107,19 @@ namespace THEBADDEST.SimpleDependencyInjection
             {
                 foreach (var obj in objects)
                 {
-                    DependencyContainer.GlobalContainer.InjectDependencies(obj);
+                    DependencyContainer.Global.InjectDependencies(obj);
                 }
             }
         }
+
+        public void RemoveScene(SceneContext sceneContext)
+        {
+            foreach (var sceneComponent in sceneContext.SceneComponents)
+            {
+                DependencyContainer.Global.Unbind(sceneComponent.Key);
+                sceneComponent.Value.ForEach(x=>DependencyContainer.Global.Unbind(x.GetType()));
+            }
+        }
+
     }
 }

@@ -51,7 +51,7 @@ namespace THEBADDEST.SimpleDependencyInjection
         /// <summary>
         /// Gets the static dependency container instance.
         /// </summary>
-        public static DependencyContainer GlobalContainer => DCExtensionMethods.GetStaticContainer();
+        public static DependencyContainer Global => DCExtensionMethods.GetStaticContainer();
         /// <summary>
         /// Creates a new instance of DependencyContainer.
         /// </summary>
@@ -76,6 +76,47 @@ namespace THEBADDEST.SimpleDependencyInjection
             return Bind(typeof(TInterface), typeof(TImplementation), factory, lifetime);
         }
 
+        
+        /// <summary>
+        /// Removes the binding of an interface to an implementation.
+        /// </summary>
+        /// <typeparam name="TInterface">The interface type.</typeparam>
+        /// <returns>The current DependencyContainer instance.</returns>
+        public DependencyContainer Unbind<TInterface>()
+        {
+            return Unbind(typeof(TInterface));
+        }
+
+        /// <summary>
+        /// Removes the binding of an interface to an implementation.
+        /// </summary>
+        /// <param name="interfaceType">The interface type to unbind.</param>
+        /// <returns>The current DependencyContainer instance.</returns>
+        public DependencyContainer Unbind(Type interfaceType)
+        {
+            if (_bindings.TryGetValue(interfaceType, out var dependencies))
+            {
+                _bindings.Remove(interfaceType);
+
+                foreach (var dependency in dependencies)
+                {
+                    if (dependency.Lifetime == Lifetime.Singleton)
+                    {
+                        _singletons.Remove(interfaceType);
+                    }
+                    else if (dependency.Lifetime == Lifetime.Scoped)
+                    {
+                        _scopedInstances.Remove(interfaceType);
+                    }
+                    else if (dependency.Lifetime == Lifetime.Transient)
+                    {
+                        _transientInstances.RemoveAll(instance => instance.GetType() == dependency.ImplementationType);
+                    }
+                }
+            }
+            return this;
+        }
+        
         /// <summary>
         /// Binds an interface to an implementation with optional factory and lifetime settings.
         /// </summary>
@@ -107,7 +148,7 @@ namespace THEBADDEST.SimpleDependencyInjection
             else
             {
                  // Add the dependency to the bindings list
-                            _bindings[interfaceType].Add(dependency);
+                _bindings[interfaceType].Add(dependency);
             }
            
 
