@@ -69,6 +69,12 @@ namespace THEBADDEST.SimpleDependencyInjection
 			}
 		}
 
+		void OnDestroy()
+		{
+			var ioTracker = DCExtensionMethods.GetStaticIOTracker();
+			ioTracker.SceneContexts.Remove(this);
+		}
+
 		void InjectSpecificObjects()
 		{
 			SceneComponents = new Dictionary<Type, List<object>>();
