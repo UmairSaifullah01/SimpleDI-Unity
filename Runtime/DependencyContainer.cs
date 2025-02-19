@@ -76,8 +76,17 @@ namespace THEBADDEST.SimpleDependencyInjection
             return Bind(typeof(TInterface), typeof(TImplementation), factory, lifetime);
         }
 
+        /// <summary>
+        /// Binds an interface to an implementation with optional factory and lifetime settings.
+        /// </summary>
+        /// <param name="interfaceType">The interface type to bind.</param>
+        /// <param name="implementationType">The implementation type to bind to the interface.</param>
+        /// <param name="factory">Custom factory method for creating instances (optional).</param>
+        /// <param name="lifetime">The lifetime of the dependency (default: Transient).</param>
+        /// <returns>The current DependencyContainer instance.</returns>
         public DependencyContainer Bind(Type interfaceType, Type implementationType, DependencyFactory factory = null, Lifetime lifetime = Lifetime.Transient)
         {
+            // Create a new dependency with provided implementation type, factory, and lifetime
             var dependency = new Dependency
             {
                 ImplementationType = implementationType,
@@ -85,14 +94,24 @@ namespace THEBADDEST.SimpleDependencyInjection
                 Lifetime = lifetime
             };
 
+            // Initialize the binding list for the interface type if it doesn't exist
             if (!_bindings.ContainsKey(interfaceType))
             {
                 _bindings[interfaceType] = new List<Dependency>();
             }
 
-            _bindings[interfaceType].Add(dependency);
+            if (lifetime == Lifetime.Singleton)
+            {
+                _bindings[interfaceType] = new List<Dependency> { dependency };
+            }
+            else
+            {
+                 // Add the dependency to the bindings list
+                            _bindings[interfaceType].Add(dependency);
+            }
+           
 
-            // Pre-create singleton instances
+            // Pre-create singleton instances if the lifetime is Singleton
             if (lifetime == Lifetime.Singleton && !_singletons.ContainsKey(interfaceType))
             {
                 _singletons[interfaceType] = dependency.Factory.Invoke();
@@ -344,15 +363,6 @@ namespace THEBADDEST.SimpleDependencyInjection
             return constructor.Invoke(resolvedParameters);
         }
     }
-    /// <summary>
-    /// Base class for MonoBehaviour scripts that support dependency injection.
-    /// </summary>
-    public class InjectableMonoBehaviour : MonoBehaviour
-    {
-        protected virtual void Awake()
-        {
-            DependencyContainer.GlobalContainer.InjectDependencies(this);
-        }
-    }
+    
     
 }
