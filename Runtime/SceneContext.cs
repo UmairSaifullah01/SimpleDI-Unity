@@ -22,13 +22,11 @@ namespace THEBADDEST.SimpleDependencyInjection
 
 		[SerializeField] SceneDepth      sceneDepth = SceneDepth.Children;
 		[SerializeField] MonoBehaviour[] sceneObjects;
-		public           string          SceneName { get; private set; }
 
 		public Dictionary<Type, List<object>> SceneComponents { get; private set; }
 
 		void Awake()
 		{
-			SceneName       = gameObject.scene.name;
 			switch (sceneDepth)
 			{
 				case SceneDepth.None:
@@ -53,26 +51,23 @@ namespace THEBADDEST.SimpleDependencyInjection
 			}
 			
 			var ioTracker = DCExtensionMethods.GetStaticIOTracker();
-			ioTracker.SceneContexts.Add(this);
-			ioTracker.InjectScene(SceneName);
+			ioTracker.InjectScene(this);
 		}
 
 		void Start()
 		{
 			if (sceneDepth == SceneDepth.SpecificObjectsAfterAwake)
 			{
-				SceneName       = gameObject.scene.name;
 				InjectSpecificObjects();
 				var ioTracker = DCExtensionMethods.GetStaticIOTracker();
-				ioTracker.SceneContexts.Add(this);
-				ioTracker.InjectScene(SceneName);
+				ioTracker.InjectScene(this);
 			}
 		}
 
 		void OnDestroy()
 		{
 			var ioTracker = DCExtensionMethods.GetStaticIOTracker();
-			ioTracker.SceneContexts.Remove(this);
+			ioTracker.RemoveScene(this);
 		}
 
 		void InjectSpecificObjects()
