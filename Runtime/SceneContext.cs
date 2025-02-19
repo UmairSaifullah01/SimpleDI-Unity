@@ -6,18 +6,100 @@ using UnityEngine;
 namespace THEBADDEST.SimpleDependencyInjection
 {
 
+
+	public enum SceneDepth
+	{
+		None,
+		WholeScene,
+		Children,
+		SpecificObjects,
+		SpecificObjectsAfterAwake
+	}
 	
 	[DefaultExecutionOrder(-2)]
 	public class SceneContext : MonoBehaviour
 	{
 
-		public string SceneName { get; private set; }
+		[SerializeField] SceneDepth      sceneDepth = SceneDepth.Children;
+		[SerializeField] MonoBehaviour[] sceneObjects;
+		public           string          SceneName { get; private set; }
 
 		public Dictionary<Type, List<object>> SceneComponents { get; private set; }
 
 		void Awake()
 		{
 			SceneName       = gameObject.scene.name;
+			switch (sceneDepth)
+			{
+				case SceneDepth.None:
+					return;
+
+				case SceneDepth.WholeScene:
+					 InjectWholeScene();
+					break;
+
+				case SceneDepth.Children:
+					InjectChildren();
+					break;
+
+				case SceneDepth.SpecificObjects:
+					InjectSpecificObjects();
+					break;
+
+				case SceneDepth.SpecificObjectsAfterAwake:
+					return;
+				default:
+					throw new ArgumentOutOfRangeException();
+			}
+			
+			var ioTracker = DCExtensionMethods.GetStaticIOTracker();
+			ioTracker.SceneContexts.Add(this);
+			ioTracker.InjectScene(SceneName);
+		}
+
+		void Start()
+		{
+			if (sceneDepth == SceneDepth.SpecificObjectsAfterAwake)
+			{
+				SceneName       = gameObject.scene.name;
+				InjectSpecificObjects();
+				var ioTracker = DCExtensionMethods.GetStaticIOTracker();
+				ioTracker.SceneContexts.Add(this);
+				ioTracker.InjectScene(SceneName);
+			}
+		}
+
+		void InjectSpecificObjects()
+		{
+			SceneComponents = new Dictionary<Type, List<object>>();
+			foreach (MonoBehaviour component in sceneObjects)
+			{
+				var type = component.GetType();
+				if (!SceneComponents.ContainsKey(type))
+				{
+					SceneComponents[type] = new List<object>();
+				}
+
+				SceneComponents[type].Add(component);
+			}
+		}
+		void InjectChildren()
+		{
+			SceneComponents = new Dictionary<Type, List<object>>();
+			foreach (MonoBehaviour component in gameObject.GetComponentsInChildren<MonoBehaviour>(true))
+			{
+				var type = component.GetType();
+				if (!SceneComponents.ContainsKey(type))
+				{
+					SceneComponents[type] = new List<object>();
+				}
+
+				SceneComponents[type].Add(component);
+			}
+		}
+		void InjectWholeScene()
+		{
+			
 			SceneComponents = new Dictionary<Type, List<object>>();
 			foreach (var rootObj in gameObject.scene.GetRootGameObjects())
 			{
@@ -32,10 +114,6 @@ namespace THEBADDEST.SimpleDependencyInjection
 					SceneComponents[type].Add(component);
 				}
 			}
-
-			var ioTracker = DCExtensionMethods.GetStaticIOTracker();
-			ioTracker.SceneContexts.Add(this);
-			ioTracker.InjectScene(SceneName);
 		}
 
 	}
