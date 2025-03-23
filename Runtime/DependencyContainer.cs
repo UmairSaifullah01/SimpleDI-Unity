@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
+using System.Diagnostics;
+using Debug = UnityEngine.Debug;
+
 
 namespace THEBADDEST.SimpleDependencyInjection
 {
@@ -17,7 +20,7 @@ namespace THEBADDEST.SimpleDependencyInjection
         Scoped
     }
 
-    
+
 
     /// <summary>
     /// DependencyContainer class provides dependency injection functionality.
@@ -39,6 +42,15 @@ namespace THEBADDEST.SimpleDependencyInjection
             public Lifetime Lifetime { get; set; } // The lifetime of the dependency
         }
 
+        /// <summary>
+        /// Struct representing a conditional dependency registration.
+        /// </summary>
+        public struct ConditionalDependency
+        {
+            public Dependency Dependency { get; set; }
+            public Func<bool> Condition { get; set; }
+        }
+
         private readonly Dictionary<Type, List<Dependency>> _bindings = new Dictionary<Type, List<Dependency>>(); // Dictionary to store dependency bindings
         private readonly Dictionary<Type, object> _singletons = new Dictionary<Type, object>(); // Dictionary to store singleton instances
         private readonly Dictionary<Type, object> _scopedInstances = new Dictionary<Type, object>(); // Dictionary to store scoped instances
@@ -46,7 +58,22 @@ namespace THEBADDEST.SimpleDependencyInjection
 
         private readonly object _singletonLock = new object(); // Lock for thread-safe singleton creation
 
-        private DependencyContainer() { }
+        private readonly HashSet<Type> _validatingTypes = new HashSet<Type>();
+        private readonly Dictionary<Type, List<Type>> _dependencyGraph = new Dictionary<Type, List<Type>>();
+        private readonly ILogger _logger;
+
+        private readonly Dictionary<string, object> _aliases = new Dictionary<string, object>();
+        private readonly Dictionary<Type, List<ConditionalDependency>> _conditionalBindings = new Dictionary<Type, List<ConditionalDependency>>();
+
+        private readonly List<IDisposable> _disposables = new List<IDisposable>();
+        private readonly Version _currentVersion = new Version(1, 0, 0);
+
+        private readonly Dictionary<Type, List<Type>> _decorators = new Dictionary<Type, List<Type>>();
+
+        public DependencyContainer(ILogger logger = null)
+        {
+            _logger = logger ?? new UnityLogger();
+        }
 
         /// <summary>
         /// Gets the static dependency container instance.
@@ -76,7 +103,7 @@ namespace THEBADDEST.SimpleDependencyInjection
             return Bind(typeof(TInterface), typeof(TImplementation), factory, lifetime);
         }
 
-        
+
         /// <summary>
         /// Removes the binding of an interface to an implementation.
         /// </summary>
@@ -116,7 +143,7 @@ namespace THEBADDEST.SimpleDependencyInjection
             }
             return this;
         }
-        
+
         /// <summary>
         /// Binds an interface to an implementation with optional factory and lifetime settings.
         /// </summary>
@@ -147,10 +174,10 @@ namespace THEBADDEST.SimpleDependencyInjection
             }
             else
             {
-                 // Add the dependency to the bindings list
+                // Add the dependency to the bindings list
                 _bindings[interfaceType].Add(dependency);
             }
-           
+
 
             // Pre-create singleton instances if the lifetime is Singleton
             if (lifetime == Lifetime.Singleton && !_singletons.ContainsKey(interfaceType))
@@ -247,7 +274,7 @@ namespace THEBADDEST.SimpleDependencyInjection
             }
             return instance;
         }
-        
+
 
         /// <summary>
         /// Injects dependencies into fields, properties, and methods marked with the [Inject] attribute on the target object.
@@ -403,7 +430,241 @@ namespace THEBADDEST.SimpleDependencyInjection
 
             return constructor.Invoke(resolvedParameters);
         }
+
+        public void ValidateDependencies()
+        {
+            _validatingTypes.Clear();
+            _dependencyGraph.Clear();
+
+            foreach (var binding in _bindings)
+            {
+                ValidateDependency(binding.Key);
+            }
+        }
+
+        private void ValidateDependency(Type type)
+        {
+            if (_validatingTypes.Contains(type))
+            {
+                throw new CircularDependencyException($"Circular dependency detected for type {type.Name}");
+            }
+
+            _validatingTypes.Add(type);
+
+            if (_bindings.TryGetValue(type, out var dependencies))
+            {
+                foreach (var dependency in dependencies)
+                {
+                    var implementationType = dependency.ImplementationType;
+                    ValidateDependency(implementationType);
+
+                    if (!_dependencyGraph.ContainsKey(type))
+                    {
+                        _dependencyGraph[type] = new List<Type>();
+                    }
+                    _dependencyGraph[type].Add(implementationType);
+                }
+            }
+
+            _validatingTypes.Remove(type);
+        }
+
+        public class CircularDependencyException : Exception
+        {
+            public CircularDependencyException(string message) : base(message) { }
+        }
+
+        public DependencyContainer WithAlias<T>(string alias, T instance)
+        {
+            _aliases[alias] = instance;
+            return this;
+        }
+
+        public DependencyContainer BindConditional<TInterface, TImplementation>(
+            Func<bool> condition,
+            DependencyFactory factory = null,
+            Lifetime lifetime = Lifetime.Transient)
+            where TInterface : class
+            where TImplementation : class, TInterface, new()
+        {
+            var dependency = new Dependency
+            {
+                ImplementationType = typeof(TImplementation),
+                Factory = factory ?? DefaultFactory(typeof(TImplementation)),
+                Lifetime = lifetime
+            };
+
+            var conditionalDependency = new ConditionalDependency
+            {
+                Dependency = dependency,
+                Condition = condition
+            };
+
+            if (!_conditionalBindings.ContainsKey(typeof(TInterface)))
+            {
+                _conditionalBindings[typeof(TInterface)] = new List<ConditionalDependency>();
+            }
+
+            _conditionalBindings[typeof(TInterface)].Add(conditionalDependency);
+            return this;
+        }
+
+        public T ResolveWithCondition<T>(string alias = null) where T : class
+        {
+            if (!string.IsNullOrEmpty(alias) && _aliases.TryGetValue(alias, out var aliasedInstance))
+            {
+                return aliasedInstance as T;
+            }
+
+            var type = typeof(T);
+            if (_conditionalBindings.TryGetValue(type, out var conditionals))
+            {
+                foreach (var conditional in conditionals)
+                {
+                    if (conditional.Condition())
+                    {
+                        return ResolveDependency(conditional.Dependency) as T;
+                    }
+                }
+            }
+
+            return Resolve<T>();
+        }
+
+        public void LoadConfiguration<T>(T config) where T : ScriptableObject
+        {
+            var properties = typeof(T).GetProperties();
+            foreach (var property in properties)
+            {
+                if (property.PropertyType.IsInterface)
+                {
+                    var value = property.GetValue(config);
+                    if (value != null)
+                    {
+                        WithAlias(property.Name, value);
+                    }
+                }
+            }
+        }
+
+        public void ValidateVersion(Version requiredVersion)
+        {
+            if (requiredVersion > _currentVersion)
+            {
+                throw new VersionCompatibilityException(
+                    $"Required version {requiredVersion} is higher than current version {_currentVersion}");
+            }
+        }
+
+        public class VersionCompatibilityException : Exception
+        {
+            public VersionCompatibilityException(string message) : base(message) { }
+        }
+
+        public void RegisterDisposable(IDisposable disposable)
+        {
+            _disposables.Add(disposable);
+        }
+
+        public void Cleanup()
+        {
+            foreach (var disposable in _disposables)
+            {
+                try
+                {
+                    disposable.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error disposing {disposable.GetType().Name}: {ex.Message}");
+                }
+            }
+
+            _disposables.Clear();
+            _singletons.Clear();
+            _scopedInstances.Clear();
+            _transientInstances.Clear();
+            _bindings.Clear();
+            _aliases.Clear();
+            _conditionalBindings.Clear();
+        }
+
+        private object ResolveDependency(Dependency dependency)
+        {
+            try
+            {
+                var instance = dependency.Factory.Invoke();
+
+                if (instance is IDisposable disposable)
+                {
+                    RegisterDisposable(disposable);
+                }
+
+                // Apply decorators if any
+                if (_decorators.ContainsKey(dependency.ImplementationType))
+                {
+                    instance = ApplyDecorators(dependency.ImplementationType, instance);
+                }
+
+                return instance;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error resolving dependency {dependency.ImplementationType.Name}: {ex.Message}");
+                throw;
+            }
+        }
+
+        public DependencyContainer Decorate<TInterface, TDecorator>()
+            where TInterface : class
+            where TDecorator : class, TInterface
+        {
+            var interfaceType = typeof(TInterface);
+            if (!_decorators.ContainsKey(interfaceType))
+            {
+                _decorators[interfaceType] = new List<Type>();
+            }
+
+            _decorators[interfaceType].Add(typeof(TDecorator));
+            return this;
+        }
+
+        private object ApplyDecorators(Type interfaceType, object instance)
+        {
+            if (!_decorators.TryGetValue(interfaceType, out var decoratorTypes))
+            {
+                return instance;
+            }
+
+            object decoratedInstance = instance;
+            foreach (var decoratorType in decoratorTypes)
+            {
+                var constructor = decoratorType.GetConstructors()
+                    .OrderByDescending(c => c.GetParameters().Length)
+                    .First();
+
+                var parameters = constructor.GetParameters();
+                var resolvedParameters = new object[parameters.Length];
+
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    var parameter = parameters[i];
+                    if (parameter.ParameterType == interfaceType)
+                    {
+                        resolvedParameters[i] = decoratedInstance;
+                    }
+                    else
+                    {
+                        resolvedParameters[i] = Resolve(parameter.ParameterType);
+                    }
+                }
+
+                decoratedInstance = constructor.Invoke(resolvedParameters);
+            }
+
+            return decoratedInstance;
+        }
     }
-    
-    
+
+
 }

@@ -50,7 +50,6 @@ namespace THEBADDEST.SimpleDependencyInjection
 			// Force the static constructor of DCExtensionMethods to run
 			var container = DCExtensionMethods.GetStaticContainer();
 			var tracker   = DCExtensionMethods.GetStaticIOTracker();
-			Debug.Log("Dependency Injection Preloaded!");
 		}
 		/// <summary>
 		/// Binds an interface to an implementation using a custom factory.
