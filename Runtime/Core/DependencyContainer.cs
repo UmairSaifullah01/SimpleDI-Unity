@@ -5,7 +5,7 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
-
+using System.Collections.Concurrent;
 
 namespace THEBADDEST.SimpleDependencyInjection
 {
@@ -19,639 +19,408 @@ namespace THEBADDEST.SimpleDependencyInjection
         Scoped
     }
 
-
-
     /// <summary>
     /// DependencyContainer class provides dependency injection functionality.
     /// </summary>
-    public partial class DependencyContainer
+    public partial class DependencyContainer : IContainer
     {
-        /// <summary>
-        /// Delegate for creating dependency instances.
-        /// </summary>
-        public delegate object DependencyFactory();
-
-        /// <summary>
-        /// Struct representing a dependency registration.
-        /// </summary>
-        public struct Dependency
-        {
-            public Type ImplementationType { get; set; } // The implementation type of the dependency
-            public DependencyFactory Factory { get; set; } // The factory method for creating instances
-            public Lifetime Lifetime { get; set; } // The lifetime of the dependency
-        }
-
-        /// <summary>
-        /// Struct representing a conditional dependency registration.
-        /// </summary>
-        public struct ConditionalDependency
-        {
-            public Dependency Dependency { get; set; }
-            public Func<bool> Condition { get; set; }
-        }
-
-        private readonly Dictionary<Type, List<Dependency>> _bindings = new Dictionary<Type, List<Dependency>>(); // Dictionary to store dependency bindings
-        private readonly Dictionary<Type, object> _singletons = new Dictionary<Type, object>(); // Dictionary to store singleton instances
-        private readonly Dictionary<Type, object> _scopedInstances = new Dictionary<Type, object>(); // Dictionary to store scoped instances
-        private readonly List<object> _transientInstances = new List<object>(); // List to store transient instances
-
-        private readonly object _singletonLock = new object(); // Lock for thread-safe singleton creation
-
-        private readonly HashSet<Type> _validatingTypes = new HashSet<Type>();
-        private readonly Dictionary<Type, List<Type>> _dependencyGraph = new Dictionary<Type, List<Type>>();
+        private readonly ConcurrentDictionary<Type, List<IBindingConfiguration>> _bindings;
+        private readonly ConcurrentDictionary<Type, List<IDecoratorBindingConfiguration>> _decorators;
+        private readonly ConcurrentDictionary<Type, List<ICollectionBindingConfiguration>> _collections;
+        private readonly ConcurrentDictionary<Type, object> _singletons;
+        private readonly ObjectPool _objectPool;
         private readonly ILogger _logger;
+        private readonly HashSet<Type> _registeredTypes;
+        private readonly HashSet<Type> _registeredDecorators;
+        private readonly HashSet<Type> _registeredCollections;
+        private readonly HashSet<Type> _resolvingTypes;
+        private bool _disposed;
 
-        private readonly Dictionary<string, object> _aliases = new Dictionary<string, object>();
-        private readonly Dictionary<Type, List<ConditionalDependency>> _conditionalBindings = new Dictionary<Type, List<ConditionalDependency>>();
+        public IContainer Parent { get; }
 
-        private readonly List<IDisposable> _disposables = new List<IDisposable>();
-        private readonly Version _currentVersion = new Version(1, 0, 0);
-
-        private readonly Dictionary<Type, List<Type>> _decorators = new Dictionary<Type, List<Type>>();
-
-        public DependencyContainer(ILogger logger = null)
+        public DependencyContainer(
+            List<IBindingConfiguration> bindings,
+            Dictionary<Type, List<IDecoratorBindingConfiguration>> decorators,
+            Dictionary<Type, List<ICollectionBindingConfiguration>> collections,
+            HashSet<Type> registeredTypes,
+            HashSet<Type> registeredDecorators,
+            HashSet<Type> registeredCollections,
+            IContainer parent = null,
+            ILogger logger = null)
         {
-            _logger = logger ?? new UnityLogger();
-        }
-        
+            _bindings = new ConcurrentDictionary<Type, List<IBindingConfiguration>>();
+            _decorators = new ConcurrentDictionary<Type, List<IDecoratorBindingConfiguration>>(decorators);
+            _collections = new ConcurrentDictionary<Type, List<ICollectionBindingConfiguration>>(collections);
+            _singletons = new ConcurrentDictionary<Type, object>();
+            _objectPool = new ObjectPool();
+            _logger = logger ?? new DefaultLogger();
+            _registeredTypes = registeredTypes;
+            _registeredDecorators = registeredDecorators;
+            _registeredCollections = registeredCollections;
+            _resolvingTypes = new HashSet<Type>();
+            Parent = parent;
 
-        /// <summary>
-        /// Binds an interface to an implementation with optional factory and lifetime settings.
-        /// </summary>
-        /// <typeparam name="TInterface">The interface type.</typeparam>
-        /// <typeparam name="TImplementation">The implementation type.</typeparam>
-        /// <param name="factory">Custom factory method for creating instances (optional).</param>
-        /// <param name="lifetime">The lifetime of the dependency (default: Transient).</param>
-        /// <returns>The current DependencyContainer instance.</returns>
-        public DependencyContainer  Bind<TInterface, TImplementation>(DependencyFactory factory = null, Lifetime lifetime = Lifetime.Transient)
-            where TInterface : class
-            where TImplementation : class, TInterface, new()
-        {
-            return Bind(typeof(TInterface), typeof(TImplementation), factory, lifetime);
-        }
-
-
-        /// <summary>
-        /// Removes the binding of an interface to an implementation.
-        /// </summary>
-        /// <typeparam name="TInterface">The interface type.</typeparam>
-        /// <returns>The current DependencyContainer instance.</returns>
-        public DependencyContainer Unbind<TInterface>()
-        {
-            return Unbind(typeof(TInterface));
-        }
-
-        /// <summary>
-        /// Removes the binding of an interface to an implementation.
-        /// </summary>
-        /// <param name="interfaceType">The interface type to unbind.</param>
-        /// <returns>The current DependencyContainer instance.</returns>
-        public DependencyContainer Unbind(Type interfaceType)
-        {
-            if (_bindings.TryGetValue(interfaceType, out var dependencies))
+            foreach (var binding in bindings)
             {
-                _bindings.Remove(interfaceType);
-
-                foreach (var dependency in dependencies)
+                if (!_bindings.ContainsKey(binding.ServiceType))
                 {
-                    if (dependency.Lifetime == Lifetime.Singleton)
-                    {
-                        _singletons.Remove(interfaceType);
-                    }
-                    else if (dependency.Lifetime == Lifetime.Scoped)
-                    {
-                        _scopedInstances.Remove(interfaceType);
-                    }
-                    else if (dependency.Lifetime == Lifetime.Transient)
-                    {
-                        _transientInstances.RemoveAll(instance => instance.GetType() == dependency.ImplementationType);
-                    }
+                    _bindings[binding.ServiceType] = new List<IBindingConfiguration>();
                 }
+                _bindings[binding.ServiceType].Add(binding);
             }
-            return this;
         }
 
-        /// <summary>
-        /// Binds an interface to an implementation with optional factory and lifetime settings.
-        /// </summary>
-        /// <param name="interfaceType">The interface type to bind.</param>
-        /// <param name="implementationType">The implementation type to bind to the interface.</param>
-        /// <param name="factory">Custom factory method for creating instances (optional).</param>
-        /// <param name="lifetime">The lifetime of the dependency (default: Transient).</param>
-        /// <returns>The current DependencyContainer instance.</returns>
-        public DependencyContainer Bind(Type interfaceType, Type implementationType, DependencyFactory factory = null, Lifetime lifetime = Lifetime.Transient)
+        public T Resolve<T>() where T : class
         {
-            // Create a new dependency with provided implementation type, factory, and lifetime
-            var dependency = new Dependency
-            {
-                ImplementationType = implementationType,
-                Factory = factory ?? DefaultFactory(implementationType),
-                Lifetime = lifetime
-            };
-
-            // Initialize the binding list for the interface type if it doesn't exist
-            if (!_bindings.ContainsKey(interfaceType))
-            {
-                _bindings[interfaceType] = new List<Dependency>();
-            }
-
-            if (lifetime == Lifetime.Singleton)
-            {
-                _bindings[interfaceType] = new List<Dependency> { dependency };
-            }
-            else
-            {
-                // Add the dependency to the bindings list
-                _bindings[interfaceType].Add(dependency);
-            }
-
-
-            // Pre-create singleton instances if the lifetime is Singleton
-            if (lifetime == Lifetime.Singleton && !_singletons.ContainsKey(interfaceType))
-            {
-                _singletons[interfaceType] = dependency.Factory.Invoke();
-            }
-
-            return this;
+            return (T)Resolve(typeof(T));
         }
 
-        /// <summary>
-        /// Resolves a dependency by its interface type.
-        /// </summary>
-        /// <typeparam name="TInterface">The interface type.</typeparam>
-        /// <returns>The resolved dependency instance.</returns>
-        public TInterface Resolve<TInterface>() where TInterface : class
+        public T ResolveNamed<T>(string name) where T : class
         {
-            return (TInterface)Resolve(typeof(TInterface));
+            return (T)ResolveNamed(typeof(T), name);
         }
 
-        public TInterface Resolve<TInterface>(string implementationType) where TInterface : class
+        public IEnumerable<T> ResolveAll<T>() where T : class
         {
-            return (TInterface)Resolve(typeof(TInterface), Type.GetType(implementationType));
+            return ResolveAll(typeof(T)).Cast<T>();
         }
 
-        public TInterface Resolve<TInterface>(Type implementationType) where TInterface : class
+        public bool IsRegistered<T>() where T : class
         {
-            return (TInterface)Resolve(typeof(TInterface), implementationType);
+            return IsRegistered(typeof(T));
         }
 
-        private object Resolve(Type interfaceType, Type implementationType = null)
+        public bool IsRegisteredNamed<T>(string name) where T : class
         {
-            if (_singletons.TryGetValue(interfaceType, out var singletonInstance))
+            return IsRegisteredNamed(typeof(T), name);
+        }
+
+        public IScope CreateScope()
+        {
+            return new Scope(this);
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+
+            _objectPool.Clear();
+            _singletons.Clear();
+            _resolvingTypes.Clear();
+            ReflectionCache.Clear();
+
+            _disposed = true;
+        }
+
+        private object Resolve(Type type)
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(DependencyContainer));
+
+            if (!_bindings.TryGetValue(type, out var bindings) || !bindings.Any())
             {
-                InjectDependencies(singletonInstance);
-                return singletonInstance;
-            }
-
-            if (_bindings.TryGetValue(interfaceType, out var dependencies))
-            {
-                int dependencyIndex = 0;
-                if (implementationType != null)
+                if (Parent != null)
                 {
-                    dependencyIndex = dependencies.FindIndex(x => x.ImplementationType == implementationType);
-                    if (dependencyIndex == -1)
-                    {
-                        throw new Exception($"No binding found for implementation type '{implementationType}' under interface '{interfaceType}'.");
-                    }
+                    // Create a generic method call to Parent.Resolve<T>()
+                    var resolveMethod = typeof(IContainer).GetMethod(nameof(IContainer.Resolve))
+                        ?.MakeGenericMethod(type);
+                    return resolveMethod?.Invoke(Parent, null);
                 }
 
-                var dependency = dependencies[dependencyIndex];
-                object instance;
+                throw new InvalidOperationException($"No registration found for type {type}");
+            }
 
-                switch (dependency.Lifetime)
+            var binding = bindings.First();
+            return ResolveBinding(binding);
+        }
+
+        private object ResolveNamed(Type type, string name)
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(DependencyContainer));
+
+            if (!_bindings.TryGetValue(type, out var bindings))
+            {
+                if (Parent != null)
                 {
-                    case Lifetime.Singleton:
-                        instance = GetOrCreateSingleton(interfaceType, dependency);
-                        break;
-                    case Lifetime.Scoped:
-                        instance = GetOrCreateScopedInstance(interfaceType, dependency);
-                        break;
-                    default: // Transient
-                        instance = dependency.Factory.Invoke();
-                        _transientInstances.Add(instance);
-                        break;
+                    // Create a generic method call to Parent.ResolveNamed<T>()
+                    var resolveNamedMethod = typeof(IContainer).GetMethod(nameof(IContainer.ResolveNamed))
+                        ?.MakeGenericMethod(type);
+                    return resolveNamedMethod?.Invoke(Parent, new object[] { name });
                 }
 
+                throw new InvalidOperationException($"No registration found for type {type}");
+            }
+
+            var binding = bindings.FirstOrDefault(b => b.Name == name);
+            if (binding == null)
+            {
+                if (Parent != null)
+                {
+                    // Create a generic method call to Parent.ResolveNamed<T>()
+                    var resolveNamedMethod = typeof(IContainer).GetMethod(nameof(IContainer.ResolveNamed))
+                        ?.MakeGenericMethod(type);
+                    return resolveNamedMethod?.Invoke(Parent, new object[] { name });
+                }
+
+                throw new InvalidOperationException($"No registration found for type {type} with name {name}");
+            }
+
+            return ResolveBinding(binding);
+        }
+
+        private IEnumerable<object> ResolveAll(Type type)
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(DependencyContainer));
+
+            var results = new List<object>();
+
+            if (_bindings.TryGetValue(type, out var bindings))
+            {
+                results.AddRange(bindings.Select(ResolveBinding));
+            }
+
+            if (Parent != null)
+            {
+                // Create a generic method call to Parent.ResolveAll<T>()
+                var resolveAllMethod = typeof(IContainer).GetMethod(nameof(IContainer.ResolveAll))
+                    ?.MakeGenericMethod(type);
+                var parentResults = (IEnumerable)resolveAllMethod?.Invoke(Parent, null);
+                if (parentResults != null)
+                {
+                    results.AddRange(parentResults.Cast<object>());
+                }
+            }
+
+            return results;
+        }
+
+        private bool IsRegistered(Type type)
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(DependencyContainer));
+
+            if (_bindings.ContainsKey(type))
+                return true;
+
+            if (Parent != null)
+            {
+                // Create a generic method call to Parent.IsRegistered<T>()
+                var isRegisteredMethod = typeof(IContainer).GetMethod(nameof(IContainer.IsRegistered))
+                    ?.MakeGenericMethod(type);
+                return (bool)isRegisteredMethod?.Invoke(Parent, null);
+            }
+
+            return false;
+        }
+
+        private bool IsRegisteredNamed(Type type, string name)
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(DependencyContainer));
+
+            if (_bindings.TryGetValue(type, out var bindings))
+            {
+                if (bindings.Any(b => b.Name == name))
+                    return true;
+            }
+
+            if (Parent != null)
+            {
+                // Create a generic method call to Parent.IsRegisteredNamed<T>()
+                var isRegisteredNamedMethod = typeof(IContainer).GetMethod(nameof(IContainer.IsRegisteredNamed))
+                    ?.MakeGenericMethod(type);
+                return (bool)isRegisteredNamedMethod?.Invoke(Parent, new object[] { name });
+            }
+
+            return false;
+        }
+
+        private object ResolveBinding(IBindingConfiguration binding)
+        {
+            if (binding is IInstanceBindingConfiguration instanceBinding)
+                return instanceBinding.Instance;
+
+            if (binding is IFactoryBindingConfiguration factoryBinding)
+                return factoryBinding.Factory(this);
+
+            if (binding.Lifetime == Lifetime.Singleton)
+            {
+                return _singletons.GetOrAdd(binding.ServiceType, _ =>
+                {
+                    var instance = CreateInstance(binding);
+                    InjectDependencies(instance);
+                    return instance;
+                });
+            }
+
+            var pooledInstance = _objectPool.Get(binding.ImplementationType, () =>
+            {
+                var instance = CreateInstance(binding);
                 InjectDependencies(instance);
                 return instance;
-            }
+            });
 
-            throw new Exception($"Unable to resolve dependency for type '{interfaceType}'. Available bindings: {string.Join(", ", _bindings.Keys)}");
+            return ApplyDecorators(binding.ServiceType, pooledInstance);
         }
 
-        private object GetOrCreateSingleton(Type interfaceType, Dependency dependency)
+        private object CreateInstance(IBindingConfiguration binding)
         {
-            lock (_singletonLock)
+            if (_resolvingTypes.Contains(binding.ImplementationType))
+                throw new InvalidOperationException($"Circular dependency detected for type {binding.ImplementationType}");
+
+            _resolvingTypes.Add(binding.ImplementationType);
+
+            try
             {
-                if (!_singletons.TryGetValue(interfaceType, out var instance))
-                {
-                    instance = dependency.Factory.Invoke();
-                    _singletons[interfaceType] = instance;
-                }
-                return instance;
+                var factory = ReflectionCache.CreateFactory(binding.ImplementationType, Resolve);
+                return factory();
             }
-        }
-
-        private object GetOrCreateScopedInstance(Type interfaceType, Dependency dependency)
-        {
-            if (!_scopedInstances.TryGetValue(interfaceType, out var instance))
+            finally
             {
-                instance = dependency.Factory.Invoke();
-                _scopedInstances[interfaceType] = instance;
-            }
-            return instance;
-        }
-
-
-        /// <summary>
-        /// Injects dependencies into fields, properties, and methods marked with the [Inject] attribute on the target object.
-        /// </summary>
-        /// <param name="target">The target object to inject dependencies into.</param>
-        /// <returns>The current DependencyContainer instance.</returns>
-        public DependencyContainer InjectDependencies(object target)
-        {
-            InjectFields(target);
-            InjectProperties(target);
-            InjectMethods(target);
-            return this;
-        }
-
-        /// <summary>
-        /// Injects dependencies into fields marked with the [Inject] attribute.
-        /// </summary>
-        private void InjectFields(object target)
-        {
-            var targetType = target.GetType();
-            var fields = targetType.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-            foreach (var field in fields)
-            {
-                if (field.GetCustomAttribute<InjectAttribute>() != null)
-                {
-                    var fieldType = field.FieldType;
-                    try
-                    {
-                        if (fieldType.IsArray || (fieldType.IsGenericType && typeof(IEnumerable).IsAssignableFrom(fieldType)))
-                        {
-                            Type elementType = fieldType.IsArray ? fieldType.GetElementType() : fieldType.GetGenericArguments()[0];
-                            var resolvedArray = ResolveArray(elementType);
-
-                            if (fieldType.IsArray)
-                            {
-                                Array array = Array.CreateInstance(elementType, resolvedArray.Length);
-                                for (int i = 0; i < resolvedArray.Length; i++)
-                                {
-                                    array.SetValue(resolvedArray[i], i);
-                                }
-                                field.SetValue(target, array);
-                            }
-                            else
-                            {
-                                var listType = typeof(List<>).MakeGenericType(elementType);
-                                var list = Activator.CreateInstance(listType, resolvedArray);
-                                field.SetValue(target, list);
-                            }
-                        }
-                        else
-                        {
-                            var resolvedDependency = Resolve(fieldType);
-                            field.SetValue(target, resolvedDependency);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogError($"Failed to inject dependency into field '{field.Name}' on object of type '{targetType}'. Error: {e.Message}");
-                    }
-                }
+                _resolvingTypes.Remove(binding.ImplementationType);
             }
         }
 
-        /// <summary>
-        /// Injects dependencies into properties marked with the [Inject] attribute.
-        /// </summary>
-        private void InjectProperties(object target)
+        private void InjectDependencies(object instance)
         {
-            var targetType = target.GetType();
-            var properties = targetType.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var type = instance.GetType();
 
-            foreach (var property in properties)
-            {
-                if (property.GetCustomAttribute<InjectAttribute>() != null)
-                {
-                    var propertyType = property.PropertyType;
-                    try
-                    {
-                        var resolvedDependency = Resolve(propertyType);
-                        property.SetValue(target, resolvedDependency);
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogError($"Failed to inject dependency into property '{property.Name}' on object of type '{targetType}'. Error: {e.Message}");
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Injects dependencies into methods marked with the [Inject] attribute.
-        /// </summary>
-        private void InjectMethods(object target)
-        {
-            var targetType = target.GetType();
-            var methods = targetType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-            foreach (var method in methods)
-            {
-                if (method.GetCustomAttribute<InjectAttribute>() != null)
-                {
-                    var parameters = method.GetParameters();
-                    var resolvedParameters = new object[parameters.Length];
-
-                    for (int i = 0; i < parameters.Length; i++)
-                    {
-                        resolvedParameters[i] = Resolve(parameters[i].ParameterType);
-                    }
-
-                    try
-                    {
-                        method.Invoke(target, resolvedParameters);
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogError($"Failed to inject dependencies into method '{method.Name}' on object of type '{targetType}'. Error: {e.Message}");
-                    }
-                }
-            }
-        }
-
-        private object[] ResolveArray(Type elementType)
-        {
-            if (_bindings.TryGetValue(elementType, out var dependencies))
-            {
-                return dependencies.Select(dependency => Resolve(elementType, dependency.ImplementationType)).ToArray();
-            }
-            throw new Exception($"Unable to resolve array of type '{elementType}'. No bindings found.");
-        }
-
-        private DependencyFactory DefaultFactory(Type type)
-        {
-            return () => CreateInstanceWithConstructorInjection(type);
-        }
-
-        private object CreateInstanceWithConstructorInjection(Type type)
-        {
-            var constructors = type.GetConstructors();
-            if (constructors.Length == 0)
-            {
-                throw new Exception($"No public constructor found for type '{type}'.");
-            }
-
-            var constructor = constructors[0]; // Use the first constructor (can be improved to choose the most suitable one)
+            // Inject constructor parameters
+            var constructor = ReflectionCache.GetConstructor(type);
             var parameters = constructor.GetParameters();
-            var resolvedParameters = new object[parameters.Length];
+            var constructorArgs = new object[parameters.Length];
 
             for (int i = 0; i < parameters.Length; i++)
             {
-                resolvedParameters[i] = Resolve(parameters[i].ParameterType);
-            }
+                var parameter = parameters[i];
+                var injectAttribute = parameter.GetCustomAttribute<InjectAttribute>();
+                if (injectAttribute == null) continue;
 
-            return constructor.Invoke(resolvedParameters);
-        }
-
-        public void ValidateDependencies()
-        {
-            _validatingTypes.Clear();
-            _dependencyGraph.Clear();
-
-            foreach (var binding in _bindings)
-            {
-                ValidateDependency(binding.Key);
-            }
-        }
-
-        private void ValidateDependency(Type type)
-        {
-            if (_validatingTypes.Contains(type))
-            {
-                throw new CircularDependencyException($"Circular dependency detected for type {type.Name}");
-            }
-
-            _validatingTypes.Add(type);
-
-            if (_bindings.TryGetValue(type, out var dependencies))
-            {
-                foreach (var dependency in dependencies)
-                {
-                    var implementationType = dependency.ImplementationType;
-                    ValidateDependency(implementationType);
-
-                    if (!_dependencyGraph.ContainsKey(type))
-                    {
-                        _dependencyGraph[type] = new List<Type>();
-                    }
-                    _dependencyGraph[type].Add(implementationType);
-                }
-            }
-
-            _validatingTypes.Remove(type);
-        }
-
-        public class CircularDependencyException : Exception
-        {
-            public CircularDependencyException(string message) : base(message) { }
-        }
-
-        public DependencyContainer WithAlias<T>(string alias, T instance)
-        {
-            _aliases[alias] = instance;
-            return this;
-        }
-
-        public DependencyContainer BindConditional<TInterface, TImplementation>(
-            Func<bool> condition,
-            DependencyFactory factory = null,
-            Lifetime lifetime = Lifetime.Transient)
-            where TInterface : class
-            where TImplementation : class, TInterface, new()
-        {
-            var dependency = new Dependency
-            {
-                ImplementationType = typeof(TImplementation),
-                Factory = factory ?? DefaultFactory(typeof(TImplementation)),
-                Lifetime = lifetime
-            };
-
-            var conditionalDependency = new ConditionalDependency
-            {
-                Dependency = dependency,
-                Condition = condition
-            };
-
-            if (!_conditionalBindings.ContainsKey(typeof(TInterface)))
-            {
-                _conditionalBindings[typeof(TInterface)] = new List<ConditionalDependency>();
-            }
-
-            _conditionalBindings[typeof(TInterface)].Add(conditionalDependency);
-            return this;
-        }
-
-        public T ResolveWithCondition<T>(string alias = null) where T : class
-        {
-            if (!string.IsNullOrEmpty(alias) && _aliases.TryGetValue(alias, out var aliasedInstance))
-            {
-                return aliasedInstance as T;
-            }
-
-            var type = typeof(T);
-            if (_conditionalBindings.TryGetValue(type, out var conditionals))
-            {
-                foreach (var conditional in conditionals)
-                {
-                    if (conditional.Condition())
-                    {
-                        return ResolveDependency(conditional.Dependency) as T;
-                    }
-                }
-            }
-
-            return Resolve<T>();
-        }
-
-        public void LoadConfiguration<T>(T config) where T : ScriptableObject
-        {
-            var properties = typeof(T).GetProperties();
-            foreach (var property in properties)
-            {
-                if (property.PropertyType.IsInterface)
-                {
-                    var value = property.GetValue(config);
-                    if (value != null)
-                    {
-                        WithAlias(property.Name, value);
-                    }
-                }
-            }
-        }
-
-        public void ValidateVersion(Version requiredVersion)
-        {
-            if (requiredVersion > _currentVersion)
-            {
-                throw new VersionCompatibilityException(
-                    $"Required version {requiredVersion} is higher than current version {_currentVersion}");
-            }
-        }
-
-        public class VersionCompatibilityException : Exception
-        {
-            public VersionCompatibilityException(string message) : base(message) { }
-        }
-
-        public void RegisterDisposable(IDisposable disposable)
-        {
-            _disposables.Add(disposable);
-        }
-
-        public void Cleanup()
-        {
-            foreach (var disposable in _disposables)
-            {
                 try
                 {
-                    disposable.Dispose();
+                    var value = injectAttribute.Name != null
+                        ? ResolveNamed(parameter.ParameterType, injectAttribute.Name)
+                        : Resolve(parameter.ParameterType);
+                    constructorArgs[i] = value;
                 }
-                catch (Exception ex)
+                catch (InvalidOperationException) when (injectAttribute.Optional)
                 {
-                    _logger.LogError($"Error disposing {disposable.GetType().Name}: {ex.Message}");
+                    // Skip optional dependencies that can't be resolved
+                    continue;
                 }
             }
 
-            _disposables.Clear();
-            _singletons.Clear();
-            _scopedInstances.Clear();
-            _transientInstances.Clear();
-            _bindings.Clear();
-            _aliases.Clear();
-            _conditionalBindings.Clear();
-        }
+            // Create instance with constructor parameters
+            instance = constructor.Invoke(constructorArgs);
 
-        private object ResolveDependency(Dependency dependency)
-        {
-            try
+            // Inject properties
+            var properties = ReflectionCache.GetInjectableProperties(type);
+            foreach (var property in properties)
             {
-                var instance = dependency.Factory.Invoke();
+                var injectAttribute = property.GetCustomAttribute<InjectAttribute>();
+                if (injectAttribute == null) continue;
 
-                if (instance is IDisposable disposable)
+                try
                 {
-                    RegisterDisposable(disposable);
+                    var value = injectAttribute.Name != null
+                        ? ResolveNamed(property.PropertyType, injectAttribute.Name)
+                        : Resolve(property.PropertyType);
+                    property.SetValue(instance, value);
                 }
-
-                // Apply decorators if any
-                if (_decorators.ContainsKey(dependency.ImplementationType))
+                catch (InvalidOperationException) when (injectAttribute.Optional)
                 {
-                    instance = ApplyDecorators(dependency.ImplementationType, instance);
+                    // Skip optional dependencies that can't be resolved
+                    continue;
                 }
-
-                return instance;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error resolving dependency {dependency.ImplementationType.Name}: {ex.Message}");
-                throw;
-            }
-        }
-
-        public DependencyContainer Decorate<TInterface, TDecorator>()
-            where TInterface : class
-            where TDecorator : class, TInterface
-        {
-            var interfaceType = typeof(TInterface);
-            if (!_decorators.ContainsKey(interfaceType))
-            {
-                _decorators[interfaceType] = new List<Type>();
             }
 
-            _decorators[interfaceType].Add(typeof(TDecorator));
-            return this;
-        }
-
-        private object ApplyDecorators(Type interfaceType, object instance)
-        {
-            if (!_decorators.TryGetValue(interfaceType, out var decoratorTypes))
+            // Inject methods
+            var methods = ReflectionCache.GetInjectableMethods(type);
+            foreach (var method in methods)
             {
-                return instance;
-            }
+                var methodParameters = method.GetParameters();
+                var values = new List<object>();
+                var hasOptionalDependencies = false;
 
-            object decoratedInstance = instance;
-            foreach (var decoratorType in decoratorTypes)
-            {
-                var constructor = decoratorType.GetConstructors()
-                    .OrderByDescending(c => c.GetParameters().Length)
-                    .First();
-
-                var parameters = constructor.GetParameters();
-                var resolvedParameters = new object[parameters.Length];
-
-                for (int i = 0; i < parameters.Length; i++)
+                foreach (var parameter in methodParameters)
                 {
-                    var parameter = parameters[i];
-                    if (parameter.ParameterType == interfaceType)
+                    var injectAttribute = parameter.GetCustomAttribute<InjectAttribute>();
+                    if (injectAttribute == null) continue;
+
+                    try
                     {
-                        resolvedParameters[i] = decoratedInstance;
+                        var value = injectAttribute.Name != null
+                            ? ResolveNamed(parameter.ParameterType, injectAttribute.Name)
+                            : Resolve(parameter.ParameterType);
+                        values.Add(value);
                     }
-                    else
+                    catch (InvalidOperationException) when (injectAttribute.Optional)
                     {
-                        resolvedParameters[i] = Resolve(parameter.ParameterType);
+                        hasOptionalDependencies = true;
+                        continue;
                     }
                 }
 
-                decoratedInstance = constructor.Invoke(resolvedParameters);
+                if (!hasOptionalDependencies || values.Count > 0)
+                {
+                    method.Invoke(instance, values.ToArray());
+                }
+            }
+        }
+
+        private object ApplyDecorators(Type serviceType, object instance)
+        {
+            if (!_decorators.TryGetValue(serviceType, out var decorators))
+                return instance;
+
+            var orderedDecorators = decorators.OrderBy(d => d.Order);
+            foreach (var decorator in orderedDecorators)
+            {
+                var decoratorInstance = CreateInstance(decorator);
+                InjectDependencies(decoratorInstance);
+
+                // Set the decorated service on the decorator
+                var setMethod = decoratorInstance.GetType().GetMethod("SetAnalyticsService");
+                if (setMethod != null)
+                {
+                    setMethod.Invoke(decoratorInstance, new[] { instance });
+                }
+
+                instance = decoratorInstance;
             }
 
-            return decoratedInstance;
+            return instance;
         }
     }
 
+    /// <summary>
+    /// Implementation of IScope
+    /// </summary>
+    internal class Scope : IScope
+    {
+        private readonly DependencyContainer _container;
+        private bool _disposed;
 
+        public IContainer Parent => _container;
+
+        public Scope(DependencyContainer container)
+        {
+            _container = container;
+        }
+
+        public T Resolve<T>() where T : class => _container.Resolve<T>();
+        public T ResolveNamed<T>(string name) where T : class => _container.ResolveNamed<T>(name);
+        public IEnumerable<T> ResolveAll<T>() where T : class => _container.ResolveAll<T>();
+        public bool IsRegistered<T>() where T : class => _container.IsRegistered<T>();
+        public bool IsRegisteredNamed<T>(string name) where T : class => _container.IsRegisteredNamed<T>(name);
+        public IScope CreateScope() => new Scope(_container);
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+        }
+    }
 }
