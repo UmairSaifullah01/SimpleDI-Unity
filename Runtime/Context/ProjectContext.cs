@@ -36,7 +36,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 				if(!projectContext.enabled) return;
 				
 				projectContext.ConvertDictionaryBeforeSceneLoaded();
-				DCExtensionMethods.GetStaticIOTracker().InjectProject(projectContext);
+				DependencyContainer.GetStaticIOTracker().InjectProject(projectContext);
 			}
 		}
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -48,7 +48,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 				if(!projectContext.enabled) return;
 				
 				projectContext.ConvertDictionaryAfterSceneLoaded();
-				DCExtensionMethods.GetStaticIOTracker().InjectProject(projectContext);
+				DependencyContainer.GetStaticIOTracker().InjectProject(projectContext);
 			}
 		}
 

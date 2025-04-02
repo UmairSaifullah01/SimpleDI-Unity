@@ -50,7 +50,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 					throw new ArgumentOutOfRangeException();
 			}
 			
-			var ioTracker = DCExtensionMethods.GetStaticIOTracker();
+			var ioTracker = DependencyContainer.GetStaticIOTracker();
 			ioTracker.InjectScene(this);
 		}
 
@@ -59,14 +59,14 @@ namespace THEBADDEST.SimpleDependencyInjection
 			if (sceneDepth == SceneDepth.SpecificObjectsAfterAwake)
 			{
 				InjectSpecificObjects();
-				var ioTracker = DCExtensionMethods.GetStaticIOTracker();
+				var ioTracker = DependencyContainer.GetStaticIOTracker();
 				ioTracker.InjectScene(this);
 			}
 		}
 
 		void OnDestroy()
 		{
-			var ioTracker = DCExtensionMethods.GetStaticIOTracker();
+			var ioTracker = DependencyContainer.GetStaticIOTracker();
 			ioTracker.RemoveScene(this);
 		}
 
