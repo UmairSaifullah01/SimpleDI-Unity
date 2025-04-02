@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
-using System.Diagnostics;
 using Debug = UnityEngine.Debug;
 
 
@@ -25,7 +24,7 @@ namespace THEBADDEST.SimpleDependencyInjection
     /// <summary>
     /// DependencyContainer class provides dependency injection functionality.
     /// </summary>
-    public class DependencyContainer
+    public partial class DependencyContainer
     {
         /// <summary>
         /// Delegate for creating dependency instances.
@@ -74,19 +73,7 @@ namespace THEBADDEST.SimpleDependencyInjection
         {
             _logger = logger ?? new UnityLogger();
         }
-
-        /// <summary>
-        /// Gets the static dependency container instance.
-        /// </summary>
-        public static DependencyContainer Global => DCExtensionMethods.GetStaticContainer();
-        /// <summary>
-        /// Creates a new instance of DependencyContainer.
-        /// </summary>
-        /// <returns>The created DependencyContainer instance.</returns>
-        public static DependencyContainer Create()
-        {
-            return new DependencyContainer();
-        }
+        
 
         /// <summary>
         /// Binds an interface to an implementation with optional factory and lifetime settings.
@@ -96,7 +83,7 @@ namespace THEBADDEST.SimpleDependencyInjection
         /// <param name="factory">Custom factory method for creating instances (optional).</param>
         /// <param name="lifetime">The lifetime of the dependency (default: Transient).</param>
         /// <returns>The current DependencyContainer instance.</returns>
-        public DependencyContainer Bind<TInterface, TImplementation>(DependencyFactory factory = null, Lifetime lifetime = Lifetime.Transient)
+        public DependencyContainer  Bind<TInterface, TImplementation>(DependencyFactory factory = null, Lifetime lifetime = Lifetime.Transient)
             where TInterface : class
             where TImplementation : class, TInterface, new()
         {
