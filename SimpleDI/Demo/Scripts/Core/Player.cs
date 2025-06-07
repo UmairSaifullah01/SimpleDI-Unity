@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Linq;
 
-namespace THEBADDEST.SimpleDependencyInjection.Demo
+namespace THEBADDEST.UnityDI.Demo
 {
     /// <summary>
     /// Player class that demonstrates dependency injection with weapons.

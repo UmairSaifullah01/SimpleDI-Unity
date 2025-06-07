@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-namespace THEBADDEST.SimpleDependencyInjection.UIDemo
+namespace THEBADDEST.UnityDI.UIDemo
 {
     /// <summary>
     /// Manages UI screens in the game.

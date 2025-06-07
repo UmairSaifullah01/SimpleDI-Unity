@@ -1,7 +1,7 @@
 using UnityEngine;
 
 
-namespace THEBADDEST.SimpleDependencyInjection
+namespace THEBADDEST.UnityDI
 {
 
 

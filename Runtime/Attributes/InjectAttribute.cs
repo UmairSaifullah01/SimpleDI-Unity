@@ -1,7 +1,7 @@
 ﻿using System;
 
 
-namespace THEBADDEST.SimpleDependencyInjection
+namespace THEBADDEST.UnityDI
 {
 	/// <summary>
 	/// Attribute for marking fields, properties, or methods that should be injected.

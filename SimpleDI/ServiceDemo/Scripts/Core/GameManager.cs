@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Threading.Tasks;
 
-namespace THEBADDEST.SimpleDependencyInjection.ServiceDemo
+namespace THEBADDEST.UnityDI.ServiceDemo
 {
     /// <summary>
     /// Game manager that demonstrates service usage.

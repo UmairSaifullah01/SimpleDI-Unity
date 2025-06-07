@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace THEBADDEST.SimpleDependencyInjection.UIDemo
+namespace THEBADDEST.UnityDI.UIDemo
 {
     /// <summary>
     /// Installer for the UI demo.

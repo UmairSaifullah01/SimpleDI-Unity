@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace THEBADDEST.SimpleDependencyInjection.UIDemo
+namespace THEBADDEST.UnityDI.UIDemo
 {
     /// <summary>
     /// Interface for UI screens in the game.

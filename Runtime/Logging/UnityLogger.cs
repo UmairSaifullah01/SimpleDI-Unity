@@ -1,7 +1,7 @@
 using UnityEngine;
 
 
-namespace THEBADDEST.SimpleDependencyInjection
+namespace THEBADDEST.UnityDI
 {
 
 
@@ -12,13 +12,13 @@ namespace THEBADDEST.SimpleDependencyInjection
 			switch (logType)
 			{
 				case LogType.Log:
-					Debug.Log($"[SimpleDI] {message}");
+					Debug.Log($"[UnityDI] {message}");
 					break;
 				case LogType.Warning:
-					Debug.LogWarning($"[SimpleDI] {message}");
+					Debug.LogWarning($"[UnityDI] {message}");
 					break;
 				case LogType.Error:
-					Debug.LogError($"[SimpleDI] {message}");
+					Debug.LogError($"[UnityDI] {message}");
 					break;
 			}
 		}

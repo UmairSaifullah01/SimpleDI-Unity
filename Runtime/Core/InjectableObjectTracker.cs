@@ -4,10 +4,8 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 
-
-namespace THEBADDEST.SimpleDependencyInjection
+namespace THEBADDEST.UnityDI
 {
-    
     public class InjectableObjectTracker
     {
         public HashSet<SceneContext> SceneContexts { get; } = new HashSet<SceneContext>();
@@ -51,13 +49,12 @@ namespace THEBADDEST.SimpleDependencyInjection
             InjectDependencies(projectContext.ProjectObjectsWithType);
         }
 
-
         /// <summary>
         /// Injects dependencies into objects attached to the specified game object.
         /// </summary>
         /// <param name="gameObject">The game object to inject dependencies into.</param>
         /// <param name="children">Whether to inject dependencies into all child objects recursively, or just the specified game object.</param>
-        public void InjectObject(GameObject gameObject,bool children=false)
+        public void InjectObject(GameObject gameObject, bool children = false)
         {
             var objectsWithType = (children ? gameObject.GetComponentsInChildren<MonoBehaviour>() : gameObject.GetComponents<MonoBehaviour>())
                 .GroupBy(component => component.GetType())
@@ -66,7 +63,7 @@ namespace THEBADDEST.SimpleDependencyInjection
             AddBindings(objectsWithType);
             InjectDependencies(objectsWithType);
         }
-        
+
         /// <summary>
         /// Adds bindings for the specified objects to the global container.
         /// </summary>
@@ -85,18 +82,17 @@ namespace THEBADDEST.SimpleDependencyInjection
                     {
                         foreach (var interfaceType in interfaces)
                         {
-                            objects.ForEach(obj => DependencyContainer.Global.Bind(interfaceType, type, () => obj, attribute.Lifetime));
+                            objects.ForEach(obj => Container.Global.Bind(interfaceType, type, () => obj, attribute.Lifetime));
                         }
                     }
                     else
                     {
-                        objects.ForEach(obj => DependencyContainer.Global.Bind(type, type, () => obj, attribute.Lifetime));
+                        objects.ForEach(obj => Container.Global.Bind(type, type, () => obj, attribute.Lifetime));
                     }
                 }
             }
         }
 
-        
         /// <summary>
         /// Injects dependencies into the specified objects.
         /// </summary>
@@ -107,7 +103,7 @@ namespace THEBADDEST.SimpleDependencyInjection
             {
                 foreach (var obj in objects)
                 {
-                    DependencyContainer.Global.InjectDependencies(obj);
+                    Container.Global.InjectDependencies(obj);
                 }
             }
         }
@@ -116,10 +112,9 @@ namespace THEBADDEST.SimpleDependencyInjection
         {
             foreach (var sceneComponent in sceneContext.SceneComponents)
             {
-                DependencyContainer.Global.Unbind(sceneComponent.Key);
-                sceneComponent.Value.ForEach(x=>DependencyContainer.Global.Unbind(x.GetType()));
+                Container.Global.Unbind(sceneComponent.Key);
+                sceneComponent.Value.ForEach(x => Container.Global.Unbind(x.GetType()));
             }
         }
-
     }
 }

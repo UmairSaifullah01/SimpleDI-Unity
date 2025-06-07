@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
-namespace THEBADDEST.SimpleDependencyInjection
+namespace THEBADDEST.UnityDI
 {
 
 
@@ -50,7 +50,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 					throw new ArgumentOutOfRangeException();
 			}
 			
-			var ioTracker = DependencyContainer.GetStaticIOTracker();
+			var ioTracker = Container.IOTracker();
 			ioTracker.InjectScene(this);
 		}
 
@@ -59,14 +59,14 @@ namespace THEBADDEST.SimpleDependencyInjection
 			if (sceneDepth == SceneDepth.SpecificObjectsAfterAwake)
 			{
 				InjectSpecificObjects();
-				var ioTracker = DependencyContainer.GetStaticIOTracker();
+				var ioTracker = Container.IOTracker();
 				ioTracker.InjectScene(this);
 			}
 		}
 
 		void OnDestroy()
 		{
-			var ioTracker = DependencyContainer.GetStaticIOTracker();
+			var ioTracker = Container.IOTracker();
 			ioTracker.RemoveScene(this);
 		}
 

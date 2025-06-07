@@ -1,17 +1,17 @@
 ﻿using UnityEngine;
 
-namespace THEBADDEST.SimpleDependencyInjection
+namespace THEBADDEST.UnityDI
 {
 	/// <summary>
 	/// Base class for all installers providing common functionality.
 	/// </summary>
 	public abstract class BaseInstaller
 	{
-		protected DependencyContainer Container { get; private set; }
+		protected Container Container { get; private set; }
 
-		protected BaseInstaller(DependencyContainer container = null)
+		protected BaseInstaller(Container container = null)
 		{
-			Container = container ?? DependencyContainer.Create();
+			Container = container ?? Container.Create();
 			Setup();
 		}
 
@@ -45,7 +45,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 	/// </summary>
 	public abstract class Installer : BaseInstaller
 	{
-		protected Installer(DependencyContainer container = null) : base(container) { }
+		protected Installer(Container container = null) : base(container) { }
 	}
 
 	/// <summary>
@@ -53,11 +53,11 @@ namespace THEBADDEST.SimpleDependencyInjection
 	/// </summary>
 	public abstract class MonoInstaller : MonoBehaviour
 	{
-		protected DependencyContainer Container { get; private set; }
+		protected Container Container { get; private set; }
 
 		protected virtual void Awake()
 		{
-			Container = DependencyContainer.Create();
+			Container = Container.Create();
 			Setup();
 		}
 
@@ -91,11 +91,11 @@ namespace THEBADDEST.SimpleDependencyInjection
 	/// </summary>
 	public abstract class SOInstaller : ScriptableObject
 	{
-		protected DependencyContainer Container { get; private set; }
+		protected Container Container { get; private set; }
 
 		protected virtual void Setup()
 		{
-			Container = DependencyContainer.Create();
+			Container = Container.Create();
 			InstallBindings();
 		}
 

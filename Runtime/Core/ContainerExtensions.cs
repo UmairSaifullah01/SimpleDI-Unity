@@ -1,15 +1,15 @@
 ﻿using System;
 using UnityEngine;
 
-namespace THEBADDEST.SimpleDependencyInjection
+namespace THEBADDEST.UnityDI
 {
 	/// <summary>
 	/// Extension methods for DependencyContainer to provide a fluent API.
 	/// </summary>
-	public static class DependencyContainerExtensions
+	public static class ContainerExtensions
 	{
 		private static readonly object _containerLock = new object();
-		private static DependencyContainer _container;
+		private static Container _container;
 		private static InjectableObjectTracker injectableObjectTracker;
 
 		
@@ -22,7 +22,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 		/// <param name="dc">The dependency container.</param>
 		/// <param name="factory">The factory method for creating instances.</param>
 		/// <returns>The dependency container.</returns>
-		public static DependencyContainer BindFactory<TInterface, TImplementation>(this DependencyContainer dc, DependencyContainer.DependencyFactory factory) where TInterface : class where TImplementation : class, TInterface, new()
+		public static Container BindFactory<TInterface, TImplementation>(this Container dc, Container.DependencyFactory factory) where TInterface : class where TImplementation : class, TInterface, new()
 		{
 			dc.Bind<TInterface, TImplementation>(factory, Lifetime.Transient);
 			return dc;
@@ -34,9 +34,9 @@ namespace THEBADDEST.SimpleDependencyInjection
 		/// <typeparam name="TInterface">The interface type.</typeparam>
 		/// <param name="dc">The dependency container.</param>
 		/// <returns>The binding configuration.</returns>
-		public static Binding Bind<TInterface>(this DependencyContainer dc) where TInterface : class
+		public static Binding Bind<TInterface>(this Container dc) where TInterface : class
 		{
-			return new Binding { DependencyContainer = dc, InterfaceType = typeof(TInterface) };
+			return new Binding { Container = dc, InterfaceType = typeof(TInterface) };
 		}
 
 		/// <summary>
@@ -46,7 +46,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 		/// <param name="binding">The binding configuration.</param>
 		/// <param name="factory">The factory method for creating instances (optional).</param>
 		/// <returns>The binding configuration.</returns>
-		public static Binding To<TImplementation>(this Binding binding, DependencyContainer.DependencyFactory factory = null) where TImplementation : class
+		public static Binding To<TImplementation>(this Binding binding, Container.DependencyFactory factory = null) where TImplementation : class
 		{
 			binding.ImplementationType = typeof(TImplementation);
 			binding.Factory = factory;

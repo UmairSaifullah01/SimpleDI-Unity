@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace THEBADDEST.SimpleDependencyInjection.ServiceDemo
+namespace THEBADDEST.UnityDI.ServiceDemo
 {
     /// <summary>
     /// Installer for the service demo.

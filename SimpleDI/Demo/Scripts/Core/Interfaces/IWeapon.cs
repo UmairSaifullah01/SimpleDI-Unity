@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace THEBADDEST.SimpleDependencyInjection.Demo
+namespace THEBADDEST.UnityDI.Demo
 {
     /// <summary>
     /// Interface defining the contract for weapons in the game.

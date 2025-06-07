@@ -1,13 +1,13 @@
 using UnityEngine;
 
 
-namespace THEBADDEST.SimpleDependencyInjection
+namespace THEBADDEST.UnityDI
 {
 
 
 	public abstract class DIConfiguration : ScriptableObject
 	{
-		public virtual void Configure(DependencyContainer container)
+		public virtual void Configure(Container container)
 		{
 			container.LoadConfiguration(this);
 		}

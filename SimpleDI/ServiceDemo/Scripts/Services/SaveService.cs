@@ -2,7 +2,7 @@ using UnityEngine;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
-namespace THEBADDEST.SimpleDependencyInjection.ServiceDemo
+namespace THEBADDEST.UnityDI.ServiceDemo
 {
     /// <summary>
     /// Implementation of save service.

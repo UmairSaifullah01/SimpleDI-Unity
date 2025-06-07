@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
-namespace THEBADDEST.SimpleDependencyInjection.UIDemo
+namespace THEBADDEST.UnityDI.UIDemo
 {
     /// <summary>
     /// Main menu screen implementation.

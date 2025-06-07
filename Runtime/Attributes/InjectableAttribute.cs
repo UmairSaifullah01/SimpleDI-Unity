@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 
 
-namespace THEBADDEST.SimpleDependencyInjection
+namespace THEBADDEST.UnityDI
 {
 
 
@@ -14,7 +14,7 @@ namespace THEBADDEST.SimpleDependencyInjection
 	{
 		public Lifetime                              Lifetime { get; }
 		
-		public InjectableAttribute(Lifetime lifetime = SimpleDependencyInjection.Lifetime.Transient)
+		public InjectableAttribute(Lifetime lifetime = UnityDI.Lifetime.Transient)
 		{
 			Lifetime = lifetime;
 		}

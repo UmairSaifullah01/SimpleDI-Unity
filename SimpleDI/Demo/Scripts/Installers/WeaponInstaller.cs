@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace THEBADDEST.SimpleDependencyInjection.Demo
+namespace THEBADDEST.UnityDI.Demo
 {
     /// <summary>
     /// Installer class for setting up weapon dependencies.

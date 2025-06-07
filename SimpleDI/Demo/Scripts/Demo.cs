@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace THEBADDEST.SimpleDependencyInjection.Demo
+namespace THEBADDEST.UnityDI.Demo
 {
     /// <summary>
     /// Demo class demonstrating the usage of dependency injection with weapons.
