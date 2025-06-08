@@ -34,14 +34,12 @@ namespace THEBADDEST.UnityDI
 			var projectContext = Resources.Load("ProjectContext") as ProjectContext;
 			if (projectContext == null)
 			{
-				projectContext=CreateProjectContext();
+				projectContext = CreateProjectContext();
 			}
-			if (projectContext != null)
-			{
-				if (!projectContext.enabled) return;
-				projectContext.ConvertDictionaryBeforeSceneLoaded();
-				Container.IOTracker().InjectProject(projectContext);
-			}
+			if (projectContext == null) return;
+			if (!projectContext.enabled) return;
+			projectContext.ConvertDictionaryBeforeSceneLoaded();
+			Container.IOTracker().InjectProject(projectContext);
 		}
 
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -50,16 +48,14 @@ namespace THEBADDEST.UnityDI
 			var projectContext = Resources.Load("ProjectContext") as ProjectContext;
 			if (projectContext == null)
 			{
-				projectContext=CreateProjectContext();
+				projectContext = CreateProjectContext();
 			}
-			if (projectContext != null)
-			{
-				if (!projectContext.enabled) return;
-				projectContext.ConvertDictionaryAfterSceneLoaded();
-				Container.IOTracker().InjectProject(projectContext);
-			}
+			if (projectContext == null) return;
+			if (!projectContext.enabled) return;
+			projectContext.ConvertDictionaryAfterSceneLoaded();
+			Container.IOTracker().InjectProject(projectContext);
 		}
-		
+
 
 		static ProjectContext CreateProjectContext()
 		{
@@ -79,8 +75,8 @@ namespace THEBADDEST.UnityDI
 			UnityEditor.AssetDatabase.Refresh();
 			return projectContext;
 #endif
-			return null;		
-		} 
+			return null;
+		}
 
 	}
 

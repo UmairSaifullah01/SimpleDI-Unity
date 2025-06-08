@@ -1,6 +1,6 @@
 # Simple Dependency Injection For Unity
 
-A Unity dependency injection container for managing bindings, resolving, and injecting dependencies..
+A lightweight and powerful dependency injection container for Unity that makes it easy to manage dependencies, bindings, and object lifecycle.
 
 ## Installation
 
@@ -8,7 +8,6 @@ This library is distributed via Unity's built-in package manager. Required Unity
 
 ```
 https://github.com/UmairSaifullah01/SimpleDI-Unity.git
-
 ```
 
 ### Unity Package
@@ -16,60 +15,144 @@ https://github.com/UmairSaifullah01/SimpleDI-Unity.git
 - Open Unity project
 - Download and run .unitypackage file from the latest release
 
-## Usage
-
 ![SimpleDI](https://raw.githubusercontent.com/UmairSaifullah01/Images/master/SimpleDI.jpg)
 
-## Example
+## Features
 
-Create a installer class and add binding to container
+### Core Features
+
+- **Multiple Lifetime Scopes**
+
+  - Transient: New instance created for each request
+  - Singleton: Single instance shared across all requests
+  - Scoped: One instance per scope (e.g., per scene)
+
+- **Dependency Injection Types**
+
+  - Constructor Injection
+  - Field Injection (using [Inject] attribute)
+  - Property Injection (using [Inject] attribute)
+  - Method Injection (using [Inject] attribute)
+
+- **Binding Capabilities**
+
+  - Interface to Implementation binding
+  - Multiple implementations for single interface
+  - Custom factory methods
+  - Conditional bindings
+  - Decorator pattern support
+
+- **Installation Types**
+  - Standard Installer (for non-MonoBehaviour scenarios)
+  - MonoInstaller (for Unity components)
+  - SOInstaller (ScriptableObject-based configuration)
+
+### Advanced Features
+
+- **Automatic Registration**
+
+  - [Injectable] attribute for automatic registration
+  - Automatic interface binding
+  - Scene and Project context support
+
+- **Unity Integration**
+
+  - MonoBehaviour support
+  - ScriptableObject support
+  - Scene-based dependency management
+  - Project-wide dependency management
+
+- **Extension Methods**
+  - Fluent API for binding
+  - Convenient dependency resolution
+  - Unity-specific instantiation helpers
+
+## Usage
+
+### Basic Example
+
+Create an installer class and add bindings to the container:
 
 ```csharp
 public class WeaponInstaller : Installer
+{
+    protected override void InstallBindings()
     {
-
-    	protected override void InstallBindings()
-    	{
-    		// Bind the IWeapon interface to the Sword implementation
-            // Bind the IWeapon interface to the Gun implementation
-    		 _container.Bind<IWeapon, Sword>();
-    		 _container.Bind<IWeapon, Gun>();
-
-    	}
-
+        // Bind the IWeapon interface to multiple implementations
+        _container.Bind<IWeapon, Sword>();
+        _container.Bind<IWeapon, Gun>();
     }
+}
 ```
 
-Use Inject PropertyAttribute to mark field that should inject in class
+Use [Inject] attribute to mark fields that should be injected:
 
 ```csharp
-    public class Player
+public class Player
+{
+    [Inject] public IWeapon[] _weapons;
+
+    public void Attack()
     {
-
-    	[Inject] public IWeapon[] _weapons;
-
-    	public void Attack()
-    	{
-    		_weapons[0].Attack();
-    		_weapons[1].Attack();
-    	}
-
+        _weapons[0].Attack();
+        _weapons[1].Attack();
     }
-
+}
 ```
 
-Use Installer to install all bindings to inject marked fields
+Install and use:
 
 ```csharp
-    var installer = new WeaponInstaller();
-    var player    = new Player();
-    installer.Install(player);
-    player.Attack(); // Output Weapon1 Attack, Weapon2 Attack
+var installer = new WeaponInstaller();
+var player = new Player();
+installer.Install(player);
+player.Attack(); // Output: Weapon1 Attack, Weapon2 Attack
 ```
 
-## Extension Methods
+### Advanced Usage
 
-SimpleDI now provides convenient extension methods for any object to work with dependencies:
+#### Fluent API
+
+```csharp
+// Bind with custom factory
+_container.Bind<IWeapon>()
+    .To<Sword>(() => new Sword())
+    .WithLifetime(Lifetime.Singleton);
+
+// Conditional binding
+_container.BindConditional<IWeapon, Gun>(
+    () => Application.platform == RuntimePlatform.Android
+);
+```
+
+#### Automatic Registration
+
+```csharp
+[Injectable(Lifetime.Singleton)]
+public class GameManager : IGameManager
+{
+    [Inject] private IWeapon _weapon;
+    // ...
+}
+```
+
+#### Unity Integration
+
+```csharp
+public class GameInstaller : MonoInstaller
+{
+    [SerializeField] private Player playerPrefab;
+
+    protected override void InstallBindings()
+    {
+        Container.Bind<IPlayer>()
+            .To<Player>(() => Instantiate(playerPrefab))
+            .WithLifetime(Lifetime.Singleton);
+    }
+}
+```
+
+#### Extension Methods
 
 ```csharp
 // Get a dependency
@@ -97,15 +180,14 @@ this.BindSingleton<IMyService>(new MyService());
 this.BindScoped<IMyService>(new MyService());
 ```
 
-## Features
+## Best Practices
 
-- Binding Interfaces: Allows binding interfaces to specific implementations with optional factory methods and singleton settings.
-- Dependency Resolution: Resolves instances of dependencies, supporting both singleton and non-singleton instances.
-- Injection: Injects dependencies into fields marked with the [Inject] attribute.
-- Multiple Implementations: Supports resolving specific implementations of an interface.
-- Singleton Management: Manages singleton instances to ensure only one instance is created and reused.
-- Extension Methods: Provides convenient extension methods for any object to work with dependencies.
-- Scoped Dependencies: Supports scoped lifetime for dependencies that should be shared within a specific scope.
+1. **Use Installers**: Organize your bindings in installer classes for better maintainability
+2. **Lifetime Management**: Choose appropriate lifetime scopes for your dependencies
+3. **Interface-based Design**: Program to interfaces rather than concrete implementations
+4. **Automatic Registration**: Use [Injectable] attribute for automatic registration when appropriate
+5. **Scene Organization**: Use SceneContext for scene-specific dependencies
+6. **Project-wide Dependencies**: Use ProjectContext for dependencies shared across scenes
 
 ## 🚀 About Me
 
